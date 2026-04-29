@@ -44,6 +44,7 @@ def revenue_trend():
     df["month"] = pd.to_datetime(df["month"])
     return df
 
+
 @st.cache_data(ttl=600)
 def headline_metrics():
     conn = get_connection()
@@ -133,17 +134,17 @@ st.subheader("Revenue Trend")
 trend_df = revenue_trend()
 
 date_col1, date_col2 = st.columns(2)
-start_date = date_col1.date_input(
-    "Start date",
-    value=trend_df["month"].min().date(),
-    min_value=trend_df["month"].min().date(),
-    max_value=trend_df["month"].max().date(),
-)
 end_date = date_col2.date_input(
     "End date",
     value=trend_df["month"].max().date(),
     min_value=trend_df["month"].min().date(),
     max_value=trend_df["month"].max().date(),
+)
+start_date = date_col1.date_input(
+    "Start date",
+    value=trend_df["month"].min().date(),
+    min_value=trend_df["month"].min().date(),
+    max_value=end_date,
 )
 
 filtered_df = filter_by_date_range(trend_df, start_date, end_date)
