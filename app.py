@@ -25,6 +25,43 @@ def filter_by_date_range(df, start, end):
 
 
 @st.cache_data(ttl=600)
+def get_products():
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT product_id, product_name FROM products ORDER BY product_name")
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+    return {name: pid for pid, name in rows}
+
+
+@st.cache_data(ttl=600)
+def bundle_finder(product_id):
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            WITH target_orders AS (
+                SELECT DISTINCT order_id FROM order_items WHERE product_id = %s
+            )
+            SELECT
+                p.product_name,
+                COUNT(DISTINCT oi.order_id) AS co_orders
+            FROM order_items oi
+            JOIN target_orders t  ON oi.order_id  = t.order_id
+            JOIN products      p  ON oi.product_id = p.product_id
+            WHERE oi.product_id != %s
+            GROUP BY 1
+            ORDER BY 2 DESC
+        """, (product_id, product_id))
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+    return pd.DataFrame(rows, columns=["product", "co_orders"])
+
+
+@st.cache_data(ttl=600)
 def revenue_trend():
     conn = get_connection()
     try:
@@ -202,3 +239,23 @@ else:
         ],
     )
     st.altair_chart(bar, use_container_width=True)
+
+# ── Bundle Finder ─────────────────────────────────────────────────────────────
+st.subheader("Bundle Finder")
+
+product_map = get_products()
+selected = st.selectbox("Pick a product", options=list(product_map.keys()))
+bundles_df = bundle_finder(product_map[selected])
+
+if bundles_df.empty:
+    st.info("No co-purchase data found for this product.")
+else:
+    bundle_bar = alt.Chart(bundles_df).mark_bar().encode(
+        x=alt.X("co_orders:Q", title="Orders bought together"),
+        y=alt.Y("product:N", sort="-x", title=None),
+        tooltip=[
+            alt.Tooltip("product:N", title="Product"),
+            alt.Tooltip("co_orders:Q", title="Orders together"),
+        ],
+    )
+    st.altair_chart(bundle_bar, use_container_width=True)
