@@ -46,6 +46,27 @@ def revenue_trend():
 
 
 @st.cache_data(ttl=600)
+def top_products(start, end):
+    conn = get_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                p.product_name,
+                SUM(oi.price_usd) AS revenue
+            FROM order_items oi
+            JOIN products p ON oi.product_id = p.product_id
+            WHERE TO_TIMESTAMP_NTZ(oi.created_at, 9)::DATE BETWEEN %s AND %s
+            GROUP BY 1
+            ORDER BY 2 DESC
+        """, (start, end))
+        rows = cur.fetchall()
+    finally:
+        conn.close()
+    return pd.DataFrame(rows, columns=["product", "revenue"])
+
+
+@st.cache_data(ttl=600)
 def headline_metrics():
     conn = get_connection()
     try:
@@ -163,3 +184,21 @@ else:
     )
     chart = base.mark_line() + base.mark_point(size=60)
     st.altair_chart(chart, use_container_width=True)
+
+# ── Top Products by Revenue ───────────────────────────────────────────────────
+st.subheader("Top Products by Revenue")
+
+products_df = top_products(start_date, end_date)
+
+if products_df.empty:
+    st.info("No data in the selected date range.")
+else:
+    bar = alt.Chart(products_df).mark_bar().encode(
+        x=alt.X("revenue:Q", title="Revenue ($)"),
+        y=alt.Y("product:N", sort="-x", title=None),
+        tooltip=[
+            alt.Tooltip("product:N", title="Product"),
+            alt.Tooltip("revenue:Q", title="Revenue ($)", format="$,.2f"),
+        ],
+    )
+    st.altair_chart(bar, use_container_width=True)
