@@ -1,6 +1,7 @@
 import datetime
 import pandas as pd
-import sys, os
+import sys
+import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app import filter_by_date_range

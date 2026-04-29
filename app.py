@@ -17,6 +17,7 @@ def get_connection():
         schema=os.getenv("SNOWFLAKE_SCHEMA"),
     )
 
+
 def filter_by_date_range(df, start, end):
     mask = (df["month"] >= pd.Timestamp(start)) & (df["month"] <= pd.Timestamp(end))
     return df[mask].copy()
@@ -25,17 +26,19 @@ def filter_by_date_range(df, start, end):
 @st.cache_data(ttl=600)
 def revenue_trend():
     conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        SELECT
-            DATE_TRUNC('month', TO_TIMESTAMP_NTZ(created_at, 9)::DATE) AS month,
-            SUM(price_usd) AS revenue
-        FROM orders
-        GROUP BY 1
-        ORDER BY 1
-    """)
-    rows = cur.fetchall()
-    conn.close()
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT
+                DATE_TRUNC('month', TO_TIMESTAMP_NTZ(created_at, 9)::DATE) AS month,
+                SUM(price_usd) AS revenue
+            FROM orders
+            GROUP BY 1
+            ORDER BY 1
+        """)
+        rows = cur.fetchall()
+    finally:
+        conn.close()
     df = pd.DataFrame(rows, columns=["month", "revenue"])
     df["month"] = pd.to_datetime(df["month"])
     return df
@@ -43,36 +46,38 @@ def revenue_trend():
 @st.cache_data(ttl=600)
 def headline_metrics():
     conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("""
-        WITH months AS (
+    try:
+        cur = conn.cursor()
+        cur.execute("""
+            WITH months AS (
+                SELECT
+                    DATE_TRUNC('month', TO_TIMESTAMP_NTZ(created_at, 9)::DATE) AS month,
+                    SUM(price_usd)                               AS revenue,
+                    COUNT(order_id)                              AS orders,
+                    SUM(items_purchased)                         AS items_sold,
+                    SUM(price_usd) / NULLIF(COUNT(order_id), 0) AS aov
+                FROM orders
+                GROUP BY 1
+            ),
+            ranked AS (
+                SELECT *, ROW_NUMBER() OVER (ORDER BY month DESC) AS rn FROM months
+            )
             SELECT
-                DATE_TRUNC('month', TO_TIMESTAMP_NTZ(created_at, 9)::DATE) AS month,
-                SUM(price_usd)                               AS revenue,
-                COUNT(order_id)                              AS orders,
-                SUM(items_purchased)                         AS items_sold,
-                SUM(price_usd) / NULLIF(COUNT(order_id), 0) AS aov
-            FROM orders
-            GROUP BY 1
-        ),
-        ranked AS (
-            SELECT *, ROW_NUMBER() OVER (ORDER BY month DESC) AS rn FROM months
-        )
-        SELECT
-            MAX(CASE WHEN rn = 1 THEN revenue    END),
-            MAX(CASE WHEN rn = 2 THEN revenue    END),
-            MAX(CASE WHEN rn = 1 THEN orders     END),
-            MAX(CASE WHEN rn = 2 THEN orders     END),
-            MAX(CASE WHEN rn = 1 THEN aov        END),
-            MAX(CASE WHEN rn = 2 THEN aov        END),
-            MAX(CASE WHEN rn = 1 THEN items_sold END),
-            MAX(CASE WHEN rn = 2 THEN items_sold END),
-            MAX(CASE WHEN rn = 1 THEN month      END),
-            MAX(CASE WHEN rn = 2 THEN month      END)
-        FROM ranked WHERE rn <= 2
-    """)
-    row = cur.fetchone()
-    conn.close()
+                MAX(CASE WHEN rn = 1 THEN revenue    END),
+                MAX(CASE WHEN rn = 2 THEN revenue    END),
+                MAX(CASE WHEN rn = 1 THEN orders     END),
+                MAX(CASE WHEN rn = 2 THEN orders     END),
+                MAX(CASE WHEN rn = 1 THEN aov        END),
+                MAX(CASE WHEN rn = 2 THEN aov        END),
+                MAX(CASE WHEN rn = 1 THEN items_sold END),
+                MAX(CASE WHEN rn = 2 THEN items_sold END),
+                MAX(CASE WHEN rn = 1 THEN month      END),
+                MAX(CASE WHEN rn = 2 THEN month      END)
+            FROM ranked WHERE rn <= 2
+        """)
+        row = cur.fetchone()
+    finally:
+        conn.close()
     return row
 
 def pct_delta(curr, prev):
