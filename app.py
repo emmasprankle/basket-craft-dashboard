@@ -3,6 +3,7 @@ import streamlit as st
 import snowflake.connector
 from dotenv import load_dotenv
 import pandas as pd
+import altair as alt
 
 load_dotenv()
 
@@ -125,3 +126,38 @@ col4.metric(
     f"{curr_items:,}",
     delta=pct_delta(curr_items, prev_items),
 )
+
+# ── Revenue Trend ─────────────────────────────────────────────────────────────
+st.subheader("Revenue Trend")
+
+trend_df = revenue_trend()
+
+date_col1, date_col2 = st.columns(2)
+start_date = date_col1.date_input(
+    "Start date",
+    value=trend_df["month"].min().date(),
+    min_value=trend_df["month"].min().date(),
+    max_value=trend_df["month"].max().date(),
+)
+end_date = date_col2.date_input(
+    "End date",
+    value=trend_df["month"].max().date(),
+    min_value=trend_df["month"].min().date(),
+    max_value=trend_df["month"].max().date(),
+)
+
+filtered_df = filter_by_date_range(trend_df, start_date, end_date)
+
+if filtered_df.empty:
+    st.info("No data in the selected date range.")
+else:
+    base = alt.Chart(filtered_df).encode(
+        x=alt.X("month:T", title="Month", axis=alt.Axis(format="%b %Y", labelAngle=-45)),
+        y=alt.Y("revenue:Q", title="Revenue ($)", scale=alt.Scale(zero=True)),
+        tooltip=[
+            alt.Tooltip("month:T", title="Month", format="%b %Y"),
+            alt.Tooltip("revenue:Q", title="Revenue ($)", format="$,.2f"),
+        ],
+    )
+    chart = base.mark_line() + base.mark_point(size=60)
+    st.altair_chart(chart, use_container_width=True)
