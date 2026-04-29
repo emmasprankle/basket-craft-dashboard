@@ -134,14 +134,14 @@ st.subheader("Revenue Trend")
 
 trend_df = revenue_trend()
 
-date_col1, date_col2 = st.columns(2)
-end_date = date_col2.date_input(
+st.sidebar.header("Filters")
+end_date = st.sidebar.date_input(
     "End date",
     value=trend_df["month"].max().date(),
     min_value=trend_df["month"].min().date(),
     max_value=trend_df["month"].max().date(),
 )
-start_date = date_col1.date_input(
+start_date = st.sidebar.date_input(
     "Start date",
     value=trend_df["month"].min().date(),
     min_value=trend_df["month"].min().date(),
