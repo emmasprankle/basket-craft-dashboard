@@ -82,6 +82,7 @@ def headline_metrics():
         conn.close()
     return row
 
+
 def pct_delta(curr, prev):
     """Return percentage change as a signed string like '+4.2%'."""
     if prev and prev != 0:
